@@ -23,7 +23,7 @@ export default async function UsersPage() {
   ]);
   return (
     <section className="space-y-6">
-      <PageHeader title="Users" description="Invite people, set their level and role, and set who is available for leads." />
+      <PageHeader title="Team members" description="Invite people, set their level and role, and set who is available for leads." />
       <UsersClient me={{ id: ctx.userId, level: ctx.level }} users={users} roles={roles} invites={invites} />
     </section>
   );

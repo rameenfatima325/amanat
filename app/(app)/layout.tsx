@@ -1,4 +1,4 @@
-// P1 owns the shell. Nav items come from lib/shared/nav.ts (append-only).
+// P1 owns the shell. Nav items come from lib/shared/nav.ts.
 import Link from "next/link";
 import { Toaster } from "sonner";
 import { requireUserPage, can } from "@/lib/core/session";
@@ -34,8 +34,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <div className="hidden h-16 shrink-0 items-center px-5 md:flex">
           <Link href="/dashboard" className="rounded-lg"><Logo sub={ws?.name} /></Link>
         </div>
-        <nav aria-label="Main" className="flex-1 px-3 py-4 md:pt-2">
-          <NavLinks items={items.map((n) => ({ href: n.href, label: n.label }))} />
+        <nav aria-label="Main" className="flex flex-1 flex-col px-3 py-4 md:pt-2">
+          <NavLinks items={items.map((n) => ({ href: n.href, label: n.label, section: n.section, also: n.also }))} />
         </nav>
         {live && <div className="border-t border-stone-200 px-4 py-3 sm:hidden"><StatusSelector compact /></div>}
         <div className="shrink-0 border-t border-stone-200 p-3">
@@ -50,6 +50,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               <span className="sr-only">Account menu</span>
             </summary>
             <div className="absolute inset-x-0 bottom-full mb-2 animate-fade-in rounded-xl border border-stone-200 bg-white p-1.5 shadow-lg">
+              <Link href="/settings/profile" className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm font-semibold text-stone-800 hover:bg-stone-100">
+                <Icon name="user" className="h-4 w-4 text-stone-500" /> Profile and alerts
+              </Link>
               <form action={logoutAction}>
                 <button className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm font-semibold text-stone-800 hover:bg-stone-100">
                   <Icon name="logout" className="h-4 w-4 text-stone-500" /> Log out

@@ -1,7 +1,6 @@
-import { requireUserPage, can } from "@/lib/core/session";
-import { RecoveryClient } from "./RecoveryClient";
+// The recovery queue now lives on the Leads page ("Needs attention" tab). Old links keep working.
+import { redirect } from "next/navigation";
 
-export default async function Page() {
-  const ctx = await requireUserPage();
-  return <RecoveryClient canReassign={can(ctx, "leads.reassign")} />;
+export default function Page() {
+  redirect("/leads?tab=attention");
 }

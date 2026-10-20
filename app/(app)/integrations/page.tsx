@@ -92,7 +92,7 @@ function Card(props: {
 
         {props.children}
 
-        <details className="group rounded-lg bg-stone-50 text-sm" open>
+        <details className="group rounded-lg bg-stone-50 text-sm">
           <summary className="flex list-none items-center justify-between gap-2 px-3.5 py-2.5 font-semibold text-stone-800">
             What this can and can&apos;t do
             <Icon name="chevronDown" className="chevron h-4 w-4 text-stone-500 transition-transform" />
@@ -188,7 +188,7 @@ export default async function IntegrationsPage() {
         </>}
       />
 
-      <details className="rounded-xl border border-emerald-200 bg-emerald-50/70 text-sm text-emerald-950" open>
+      <details className="rounded-xl border border-emerald-200 bg-emerald-50/70 text-sm text-emerald-950">
         <summary className="flex list-none items-center justify-between gap-2 px-5 py-3.5 font-bold">
           <span className="flex items-center gap-2"><Icon name="zap" className="h-4 w-4 text-emerald-700" />Try everything in 5 minutes</span>
           <Icon name="chevronDown" className="chevron h-4 w-4 transition-transform" />

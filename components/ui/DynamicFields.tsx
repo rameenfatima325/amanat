@@ -55,10 +55,10 @@ export function DynamicFields({ defs, values, onChange, idPrefix, required = [] 
 }
 
 /** Read-only display of custom field values on detail pages. */
-export function FieldValues({ defs, values }: { defs: FieldDefView[]; values: Record<string, unknown> }) {
+export function FieldValues({ defs, values, narrow = false }: { defs: FieldDefView[]; values: Record<string, unknown>; narrow?: boolean }) {
   if (defs.length === 0) return null;
   return (
-    <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-4">
+    <dl className={`grid gap-x-6 gap-y-4 sm:grid-cols-2 ${narrow ? "lg:grid-cols-1" : "lg:grid-cols-4"}`}>
       {defs.map((d) => {
         const v = values[d.key];
         const text = v === null || v === undefined || v === "" ? "—" : v === true ? "Yes" : v === false ? "No" : String(v);

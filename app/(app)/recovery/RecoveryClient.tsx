@@ -4,27 +4,26 @@ import Link from "next/link";
 import useSWR from "swr";
 import { ui } from "@/components/ui/styles";
 import { Icon, type IconName } from "@/components/ui/Icon";
-import { Badge, EmptyState, Notice, PageHeader } from "@/components/ui/Kit";
+import { Badge, EmptyState, Notice } from "@/components/ui/Kit";
 import { ReassignMenu } from "../leads/ReassignMenu";
 import { SourceBadge } from "../leads/LeadBadges";
 import { listRecovery } from "./actions";
 
 const ICON: Record<string, IconName> = { overdue: "clock", unassigned: "alert", new: "dot", escalated: "arrowUp", idle: "moon", away: "plane" };
 
+export async function fetchRecovery() {
+  const r = await listRecovery();
+  if (!r.ok) throw new Error(r.error);
+  return r.data;
+}
+
+/** The recovery queue (F3.7), shown as the "Needs attention" tab on the Leads page. */
 export function RecoveryClient({ canReassign }: { canReassign: boolean }) {
-  const { data, error, mutate } = useSWR("recovery", async () => {
-    const r = await listRecovery();
-    if (!r.ok) throw new Error(r.error);
-    return r.data;
-  }, { refreshInterval: 3000 });
+  const { data, error, mutate } = useSWR("recovery", fetchRecovery, { refreshInterval: 3000 });
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Recovery queue"
-        description="Leads that need a person to step in. They leave this list on their own once they are handled."
-        actions={data && data.length > 0 && <Badge tone="warn" icon="alert">{data.length} need attention</Badge>}
-      />
+    <div className="space-y-4">
+      <p className={ui.muted}>Leads that are overdue, unassigned, escalated more than once, idle too long, or whose owner is away. They leave this list on their own once someone acts.</p>
       {error && <Notice tone="bad" title="Could not load the queue.">{error.message} This page retries on its own.</Notice>}
       {!data && !error && (
         <div className="space-y-3" aria-busy="true">
@@ -34,7 +33,7 @@ export function RecoveryClient({ canReassign }: { canReassign: boolean }) {
       )}
       {data && data.length === 0 && (
         <EmptyState icon="checkCircle" title="Nothing needs attention right now">
-          Overdue, unassigned and idle leads show up here automatically.
+          Every lead has an owner who is acting on it. Overdue, unassigned and idle leads show up here automatically.
         </EmptyState>
       )}
       <ul className="grid gap-3 lg:grid-cols-2">
