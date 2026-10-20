@@ -13,6 +13,14 @@ const LEVEL_LABEL = { NEXT_ELIGIBLE: "Next available person", BACKUP: "Backup pe
 export function AssignmentForm({ initial, users }: { initial: AssignmentSettings; users: { id: string; name: string }[] }) {
   const { pending, run } = useAction();
   const [s, setS] = useState(initial);
+  const [saved, setSaved] = useState(initial);
+  const dirty = JSON.stringify(s) !== JSON.stringify(saved);
+  const nameOf = (id: string | null) => users.find((u) => u.id === id)?.name;
+  const secs = (n: number) => (Number.isNaN(n) ? "?" : n >= 120 && n % 60 === 0 ? `${n / 60} minutes` : `${n} seconds`);
+  const who = (t: keyof typeof LEVEL_LABEL) =>
+    t === "BACKUP" ? (nameOf(s.backupUserId) ? `the backup person (${nameOf(s.backupUserId)})` : "the backup person (not chosen yet)")
+    : t === "MANAGER" ? (nameOf(s.managerUserId) ? `the manager (${nameOf(s.managerUserId)})` : "the manager (not chosen yet)")
+    : "the next available person";
   const set = <K extends keyof AssignmentSettings>(k: K, v: AssignmentSettings[K]) => setS((p) => ({ ...p, [k]: v }));
   const num = (v: string) => (v === "" ? NaN : Number(v));
 
@@ -21,13 +29,26 @@ export function AssignmentForm({ initial, users }: { initial: AssignmentSettings
 
   return (
     <form
-      className="max-w-3xl space-y-6"
+      className="max-w-3xl space-y-6 pb-4"
       onSubmit={(e) => {
         e.preventDefault();
-        run(() => saveAssignmentSettings(s), { success: "Assignment settings saved." });
+        run(() => saveAssignmentSettings(s), { success: "Assignment settings saved. New leads follow these rules from now on.", onSuccess: () => setSaved(s) });
       }}
     >
-      <PageHeader title="Assignment rules" description="Choose how new leads are handed out and what happens when nobody replies. All times are in seconds." />
+      <PageHeader title="Assignment and escalation" description="Choose how new leads are handed out and what happens when nobody replies. All times are in seconds." />
+
+      <section aria-labelledby="what-h" className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-5 text-sm text-emerald-950">
+        <h2 id="what-h" className="flex items-center gap-2 font-bold"><Icon name="info" className="h-4 w-4 text-emerald-700" />What happens to a new lead with these settings</h2>
+        <ol className="mt-3 list-decimal space-y-1.5 pl-5 leading-6 marker:font-bold marker:text-emerald-700">
+          <li>It goes to the next person who is <strong>Available</strong> and has fewer than <strong>{Number.isNaN(s.maxOpenLeads) ? "?" : s.maxOpenLeads}</strong> open leads.</li>
+          <li>They have <strong>{secs(s.ackWindowSeconds)}</strong> to press Acknowledge.</li>
+          {s.levels.map((l, i) => (
+            <li key={i}>If nobody acknowledges, it moves to {who(l.type)}, who has <strong>{secs(l.seconds)}</strong>.</li>
+          ))}
+          <li>After the last step it stays with the last person and appears under <strong>Leads → Needs attention</strong>.</li>
+          <li>A lead with no activity for <strong>{secs(s.idleSeconds)}</strong> also appears under Needs attention.</li>
+        </ol>
+      </section>
 
       <section className={`${ui.card} space-y-4`}>
         <h2 className={ui.h2}>Handing out leads</h2>
@@ -107,8 +128,10 @@ export function AssignmentForm({ initial, users }: { initial: AssignmentSettings
         </label>
       </section>
 
-      <div className="sticky bottom-4 z-10 flex justify-end">
-        <button type="submit" disabled={pending} className={`${ui.btnPrimary} !shadow-md`}>{pending && <Spinner />}{pending ? "Saving…" : "Save settings"}</button>
+      <div className="sticky bottom-4 z-10 flex flex-wrap items-center justify-end gap-3 rounded-xl border border-stone-200 bg-white/95 p-3 shadow-md backdrop-blur">
+        <span className={`mr-auto text-sm ${dirty ? "font-semibold text-amber-800" : "text-stone-500"}`}>{dirty ? "You have unsaved changes." : "All changes saved."}</span>
+        <button type="button" disabled={pending || !dirty} className={ui.btnGhost} onClick={() => setS(saved)}>Undo changes</button>
+        <button type="submit" disabled={pending || !dirty} className={ui.btnPrimary}>{pending && <Spinner />}{pending ? "Saving…" : "Save settings"}</button>
       </div>
     </form>
   );

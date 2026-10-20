@@ -10,7 +10,7 @@ import { acknowledgeLead, getContactLead, type ContactLeadInfo } from "@/app/(ap
 import { Countdown } from "@/app/(app)/leads/Countdown";
 import { LeadStatusBadge, SourceBadge } from "@/app/(app)/leads/LeadBadges";
 
-const KIND = { AUTO: "Assigned", ESCALATION: "Escalated", MANUAL: "Reassigned", ABSENCE: "Moved (away)" } as const;
+const KIND = { AUTO: "Assigned automatically", ESCALATION: "Escalated automatically", MANUAL: "Reassigned by a manager", ABSENCE: "Moved because the owner went away" } as const;
 
 async function fetchInfo(contactId: string): Promise<{ info: ContactLeadInfo; receivedAt: number }> {
   const r = await getContactLead(contactId);
@@ -36,6 +36,15 @@ export function LeadSlot({ contactId }: { contactId: string }) {
           {lead.ownerOnLeave && <Badge tone="warn" icon="plane">Owner away</Badge>}
         </div>
         <p className="text-sm"><span className="text-stone-500">Owner: </span><span className="font-semibold text-stone-900">{lead.isMine ? "You" : (lead.ownerName ?? "Nobody yet")}</span></p>
+        <p className="rounded-lg bg-stone-50 px-3 py-2 text-sm text-stone-800">
+          <span className="font-semibold">Next step: </span>
+          {lead.isMine && lead.status === "ASSIGNED" ? "Acknowledge before the timer runs out, then contact the customer."
+            : lead.isMine && lead.status === "ACKNOWLEDGED" ? "Reply in Messages, add a note, or move the opportunity forward."
+            : lead.status === "UNASSIGNED" ? "Nobody has this lead. A manager can reassign it from Leads → Needs attention."
+            : lead.status === "ASSIGNED" ? `Waiting for ${lead.ownerName ?? "the owner"} to acknowledge.`
+            : lead.status === "CLOSED" ? "This lead is closed."
+            : `${lead.ownerName ?? "The owner"} is working on it.`}
+        </p>
         {lead.isMine && lead.status === "ASSIGNED" && (
           <button type="button" disabled={pending} className={`${ui.btnPrimary} w-full`}
             onClick={() => run(() => acknowledgeLead({ leadId: lead.id }), { success: "Lead acknowledged.", onSuccess: () => mutate() })}>

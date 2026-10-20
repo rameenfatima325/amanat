@@ -13,6 +13,8 @@ import { AddSummary, Avatar, Badge, Detail, EmptyState, Panel } from "@/componen
 import { ConversationSlot } from "@/components/slots/ConversationSlot";
 import { PaymentsSlot } from "@/components/slots/PaymentsSlot";
 import { AppointmentsSlot } from "@/components/slots/AppointmentsSlot";
+import { BookAppointmentSlot } from "@/components/slots/BookAppointmentSlot";
+import { Tabs } from "@/components/ui/Tabs";
 import { LeadSlot } from "@/components/slots/LeadSlot";
 import { activeFields } from "@/lib/crm/fields";
 import { nameMap, teamOptions } from "@/lib/crm/people";
@@ -47,6 +49,37 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
   const stageIcon = (kind: string) => (kind === "WON" ? "trophy" : kind === "LOST" ? "xCircle" : "dot") as "trophy" | "xCircle" | "dot";
   const stageTone = (kind: string) => (kind === "WON" ? "ok" : kind === "LOST" ? "bad" : "neutral") as "ok" | "bad" | "neutral";
 
+  const oppList = (
+    <Panel id="opps" title={<>Opportunities <span className="font-semibold tabular-nums text-stone-500">({opps.length})</span></>} flush>
+      {opps.length === 0 ? (
+        <div className="p-5"><EmptyState compact icon="target" title="No opportunities yet">Create one when this customer is interested in a deal.</EmptyState></div>
+      ) : (
+        <ul className="divide-y divide-stone-100">
+          {opps.map((o) => {
+            const s = serializeOpportunity(o, ctx);
+            return (
+              <li key={o.id}>
+                <Link href={`/opportunities/${o.id}`} className="flex flex-col gap-1.5 px-5 py-3.5 text-sm transition-colors hover:bg-stone-50 sm:flex-row sm:items-center sm:justify-between">
+                  <span className="break-words font-semibold text-stone-900">{o.title}</span>
+                  <span className="flex flex-wrap items-center gap-3">
+                    <Badge tone={stageTone(o.stage.kind)} icon={stageIcon(o.stage.kind)}>{o.stage.name}</Badge>
+                    <span className="font-semibold tabular-nums text-stone-900">{formatMoney(s.value, s.currency, s.valueMasked)}</span>
+                  </span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {can(ctx, "crm.create") && (
+        <details className="border-t border-stone-200">
+          <AddSummary>New opportunity for {c.name}</AddSummary>
+          <div className="border-t border-stone-100 p-5"><OpportunityCreateForm contactId={c.id} pipelines={pipelines} defs={oppDefs} team={team} goToNew={false} /></div>
+        </details>
+      )}
+    </Panel>
+  );
+
   return (
     <article className="space-y-6">
       <AutoRefresh />
@@ -78,7 +111,6 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
           <Detail label="Assigned to" icon="user">{c.ownerId ? names.get(c.ownerId) ?? "Former user" : "Nobody"}</Detail>
           <Detail label="Tags" icon="tag">{c.tags.length ? c.tags.map((t) => `#${t}`).join(" ") : "—"}</Detail>
         </dl>
-        {defs.length > 0 && <div className="border-t border-stone-100 pt-5"><FieldValues defs={defs} values={cf} /></div>}
         <ContactActions
           initial={{
             id: c.id, version: c.version, name: c.name, email: c.email ?? "", phone: c.phone ?? "", companyId: company?.id ?? "",
@@ -89,51 +121,40 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
         />
       </header>
 
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]">
-        <div className="min-w-0 space-y-6">
-          <Panel id="opps" title={<>Opportunities <span className="font-semibold tabular-nums text-stone-500">({opps.length})</span></>} flush>
-            {opps.length === 0 ? (
-              <div className="p-5"><EmptyState compact icon="target" title="No opportunities yet">Create one below when this contact is interested in a deal.</EmptyState></div>
-            ) : (
-              <ul className="divide-y divide-stone-100">
-                {opps.map((o) => {
-                  const s = serializeOpportunity(o, ctx);
-                  return (
-                    <li key={o.id}>
-                      <Link href={`/opportunities/${o.id}`} className="flex flex-col gap-1.5 px-5 py-3.5 text-sm transition-colors hover:bg-stone-50 sm:flex-row sm:items-center sm:justify-between">
-                        <span className="break-words font-semibold text-stone-900">{o.title}</span>
-                        <span className="flex flex-wrap items-center gap-3">
-                          <Badge tone={stageTone(o.stage.kind)} icon={stageIcon(o.stage.kind)}>{o.stage.name}</Badge>
-                          <span className="font-semibold tabular-nums text-stone-900">{formatMoney(s.value, s.currency, s.valueMasked)}</span>
-                        </span>
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-            {can(ctx, "crm.create") && (
-              <details className="border-t border-stone-200">
-                <AddSummary>New opportunity for {c.name}</AddSummary>
-                <div className="border-t border-stone-100 p-5"><OpportunityCreateForm contactId={c.id} pipelines={pipelines} defs={oppDefs} team={team} goToNew={false} /></div>
-              </details>
-            )}
-          </Panel>
-
-          <ConversationSlot contactId={c.id} />
-
-          <Panel id="tl" title="History" description="Notes, messages, stage changes and edits, newest first.">
-            <div className="space-y-6">
-              {can(ctx, "crm.edit") && <NoteForm contactId={c.id} />}
-              <Timeline entries={entries} tz={ctx.timezone} />
-            </div>
-          </Panel>
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]">
+        <div className="min-w-0">
+          <Tabs
+            label="Contact sections"
+            tabs={[
+              { id: "messages", label: "Messages", content: <ConversationSlot contactId={c.id} /> },
+              { id: "opportunities", label: "Opportunities", count: opps.length, content: oppList },
+              {
+                id: "activity", label: "Activity", count: entries.length,
+                content: (
+                  <Panel id="tl" title="Notes and history" description="Everything that happened with this customer, newest first.">
+                    <div className="space-y-6">
+                      {can(ctx, "crm.edit") && <NoteForm contactId={c.id} />}
+                      <Timeline entries={entries} tz={ctx.timezone} />
+                    </div>
+                  </Panel>
+                ),
+              },
+              { id: "payments", label: "Payments", content: <PaymentsSlot contactId={c.id} /> },
+              {
+                id: "appointments", label: "Appointments",
+                content: <div className="space-y-6"><AppointmentsSlot contactId={c.id} /><BookAppointmentSlot contactId={c.id} /></div>,
+              },
+            ]}
+          />
         </div>
 
-        <aside className="min-w-0 space-y-6" aria-label="Lead, payments and appointments">
+        <aside className="order-first min-w-0 space-y-6 lg:order-none lg:sticky lg:top-24" aria-label="Lead and details">
           <LeadSlot contactId={c.id} />
-          <PaymentsSlot contactId={c.id} />
-          <AppointmentsSlot contactId={c.id} />
+          {defs.length > 0 && (
+            <Panel id="more" title="More details">
+              <FieldValues defs={defs} values={cf} narrow />
+            </Panel>
+          )}
         </aside>
       </div>
     </article>

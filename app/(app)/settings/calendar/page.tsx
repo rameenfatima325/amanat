@@ -1,4 +1,5 @@
 // P3 owns. Connect / disconnect your own calendar (I3.1, I3.2).
+import Link from "next/link";
 import { requireUserPage } from "@/lib/shared/contracts";
 import { myCalendar } from "@/lib/integrations/appointments";
 import { Chip } from "@/lib/integrations/ui/StatusChip";
@@ -6,7 +7,6 @@ import { TimeAgo } from "@/lib/integrations/ui/TimeAgo";
 import { offsetLabel } from "@/lib/integrations/time";
 import { CalendarButtons } from "./CalendarButtons";
 import { CalendarCheck } from "./CalendarCheck";
-import { MyAppointments } from "./MyAppointments";
 import { Notice, PageHeader, Panel } from "@/components/ui/Kit";
 import { Icon } from "@/components/ui/Icon";
 
@@ -46,9 +46,9 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
 
       <CalendarCheck connected={!!c && c.status === "CONNECTED"} />
 
-      <Panel id="mine" title="My upcoming appointments" description="Customer appointments booked with you in Amanat. They are also on your Google Calendar.">
-        <MyAppointments />
-      </Panel>
+      <p className="text-sm text-stone-600">
+        Looking for your appointments? They are on the <Link href="/calendar" className="font-semibold text-emerald-800 underline">Calendar</Link> page.
+      </p>
 
       <section className="rounded-xl bg-stone-100/70 p-5 text-sm text-stone-700">
         <h2 className={"text-sm font-bold text-stone-900"}>What this can and can&apos;t do</h2>

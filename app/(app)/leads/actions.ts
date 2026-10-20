@@ -16,6 +16,9 @@ export type LeadRow = {
   id: string; contactId: string; contactName: string; source: "WEB_FORM" | "WHATSAPP" | "MANUAL";
   status: "NEW" | "ASSIGNED" | "ACKNOWLEDGED" | "UNASSIGNED" | "CLOSED";
   ownerName: string | null; reason: string | null; createdAt: string;
+  /** How the lead reached its current owner: AUTO, ESCALATION, MANUAL or ABSENCE (null before the first assignment). */
+  lastKind: string | null;
+  escalations: number;
   isMine: boolean;
   msLeft: number | null; // time until the acknowledge deadline, measured on the server so clocks can't disagree
 };
@@ -38,7 +41,7 @@ export async function listLeads(input: { filter?: string } = {}) {
       where,
       orderBy: { createdAt: "desc" },
       take: 100,
-      include: { contact: { select: { name: true } }, assignments: { orderBy: { createdAt: "desc" }, take: 1, select: { reason: true } } },
+      include: { contact: { select: { name: true } }, assignments: { orderBy: { createdAt: "desc" }, take: 1, select: { reason: true, kind: true } } },
     });
     const ownerIds = [...new Set(leads.map((l) => l.ownerId).filter((x): x is string => !!x))];
     const owners = await db.user.findMany({ where: { id: { in: ownerIds } }, select: { id: true, name: true } });
@@ -47,6 +50,7 @@ export async function listLeads(input: { filter?: string } = {}) {
       id: l.id, contactId: l.contactId, contactName: l.contact.name, source: l.source, status: l.status,
       ownerName: l.ownerId ? (name.get(l.ownerId) ?? null) : null,
       reason: l.assignments[0]?.reason ?? null, createdAt: l.createdAt.toISOString(),
+      lastKind: l.assignments[0]?.kind ?? null, escalations: l.escalationCount,
       isMine: l.ownerId === ctx.userId,
       msLeft: l.status === "ASSIGNED" && l.deadlineAt ? l.deadlineAt.getTime() - Date.now() : null,
     }));

@@ -1,5 +1,6 @@
 "use client";
-// P2 owns. Leads list with source badge and routing reason; refreshes every 3 seconds (Q11).
+// P2 owns. The lead workspace: my leads, all open leads, the recovery queue ("Needs attention") and the team.
+// Lists refresh every 3 seconds (Q11). Every action is enforced again on the server.
 import { useState } from "react";
 import Link from "next/link";
 import useSWR from "swr";
@@ -8,34 +9,78 @@ import { ui } from "@/components/ui/styles";
 import { Icon } from "@/components/ui/Icon";
 import { EmptyState, Notice, PageHeader } from "@/components/ui/Kit";
 import { Spinner } from "@/components/ui/Spinner";
-import { acknowledgeLead, createManualLead, listLeads, type LeadRow } from "./actions";
-import { Countdown } from "./Countdown";
+import { Tabs, type TabDef } from "@/components/ui/Tabs";
+import { createManualLead, listLeads, type LeadRow } from "./actions";
 import { AwayNotice } from "./StatusSelector";
 import { TeamPanel } from "./TeamPanel";
-import { ReassignMenu } from "./ReassignMenu";
-import { LeadStatusBadge, SourceBadge } from "./LeadBadges";
+import { LeadCard, byUrgency } from "./LeadCard";
+import { RecoveryClient, fetchRecovery } from "../recovery/RecoveryClient";
 
 const FILTER_LABEL: Record<string, string> = { today: "new leads today", escalated24h: "leads escalated in the last 24 hours (a lead escalated twice appears once)" };
 
-async function fetchLeads(filter?: string): Promise<{ rows: LeadRow[]; receivedAt: number }> {
+export async function fetchLeads(filter?: string): Promise<{ rows: LeadRow[]; receivedAt: number }> {
   const r = await listLeads({ filter });
   if (!r.ok) throw new Error(r.error);
   return { rows: r.data, receivedAt: Date.now() };
 }
 
-export function LeadsClient({ canCreate, canManageTeam, canReassign, filter }: { canCreate: boolean; canManageTeam: boolean; canReassign: boolean; filter?: string }) {
+function LeadList({ rows, receivedAt, canReassign, onChanged, empty }: {
+  rows: LeadRow[] | undefined; receivedAt: number; canReassign: boolean; onChanged: () => void; empty: React.ReactNode;
+}) {
+  if (!rows) {
+    return (
+      <div className="space-y-3" aria-busy="true">
+        <p className="sr-only" role="status">Loading leads…</p>
+        {[0, 1, 2].map((i) => <div key={i} className="h-40 animate-pulse rounded-xl border border-stone-200 bg-white" />)}
+      </div>
+    );
+  }
+  if (rows.length === 0) return <>{empty}</>;
+  return (
+    <ul className="space-y-3">
+      {rows.map((l) => <li key={l.id}><LeadCard lead={l} receivedAt={receivedAt} canReassign={canReassign} onChanged={onChanged} /></li>)}
+    </ul>
+  );
+}
+
+export function LeadsClient({ canCreate, canManageTeam, canReassign, seesAll, filter }: {
+  canCreate: boolean; canManageTeam: boolean; canReassign: boolean; seesAll: boolean; filter?: string;
+}) {
   const { data, error, mutate } = useSWR(filter ? `leads:${filter}` : "leads", () => fetchLeads(filter), { refreshInterval: 3000 });
+  const { data: recovery } = useSWR("recovery", fetchRecovery, { refreshInterval: 3000 });
   const { pending, run } = useAction();
   const [open, setOpen] = useState(false);
-  const rows = data?.rows;
-  const ack = (id: string) => run(() => acknowledgeLead({ leadId: id }), { success: "Lead acknowledged.", onSuccess: () => mutate() });
-  const waitingOnMe = rows?.filter((l) => l.isMine && l.status === "ASSIGNED").length ?? 0;
+  const all = data ? [...data.rows].sort(byUrgency) : undefined;
+  const mine = all?.filter((l) => l.isMine);
+  const waiting = mine?.filter((l) => l.status === "ASSIGNED").length ?? 0;
+  const receivedAt = data?.receivedAt ?? 0;
+  const refresh = () => { mutate(); };
+
+  const myEmpty = (
+    <EmptyState icon="checkCircle" title={filter ? "None of your leads match this view" : "You have no open leads"}
+      action={seesAll ? undefined : <Link href="/contacts" className={ui.btn}>Go to contacts</Link>}>
+      New leads are handed out automatically to people who are Available. Make sure your status at the top of the page is set to Available.
+    </EmptyState>
+  );
+
+  const tabs: TabDef[] = [
+    { id: "mine", label: "My leads", count: mine?.length ?? null, content: <LeadList rows={mine} receivedAt={receivedAt} canReassign={canReassign} onChanged={refresh} empty={myEmpty} /> },
+  ];
+  if (seesAll) {
+    tabs.push({
+      id: "all", label: "All open leads", count: all?.length ?? null,
+      content: <LeadList rows={all} receivedAt={receivedAt} canReassign={canReassign} onChanged={refresh}
+        empty={<EmptyState icon="leads" title={filter ? "No leads match this view" : "No open leads"}>New leads from the web form, website chat and WhatsApp appear here as soon as they arrive.</EmptyState>} />,
+    });
+  }
+  tabs.push({ id: "attention", label: "Needs attention", count: recovery?.length ?? null, attention: true, content: <RecoveryClient canReassign={canReassign} /> });
+  if (canManageTeam) tabs.push({ id: "team", label: "Team", content: <div className="max-w-2xl"><TeamPanel /></div> });
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Leads"
-        description="New enquiries and who is handling them. Acknowledge yours before the timer runs out, or the lead moves to the next person."
+        description="Every enquiry has one accountable owner. Acknowledge yours before the timer runs out, or the lead moves to the next person."
         actions={canCreate && (
           <button type="button" className={open ? ui.btn : ui.btnPrimary} onClick={() => setOpen((o) => !o)} aria-expanded={open}>
             <Icon name={open ? "x" : "plus"} className="h-4 w-4" /> {open ? "Close" : "New lead"}
@@ -43,11 +88,16 @@ export function LeadsClient({ canCreate, canManageTeam, canReassign, filter }: {
         )}
       />
 
+      {waiting > 0 && (
+        <Notice tone="warn" role="status" title={`${waiting} ${waiting === 1 ? "lead is" : "leads are"} waiting for you to acknowledge.`}>
+          They are at the top of My leads, with the least time left first.
+        </Notice>
+      )}
       {filter && (
         <div role="status" className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-stone-200 bg-white px-4 py-2.5 text-sm text-stone-800">
           <Icon name="filter" className="h-4 w-4 text-stone-500" />
           <span>Showing {FILTER_LABEL[filter] ?? "filtered leads"}.</span>
-          <Link href="/leads" className={ui.link}>Show all my open leads</Link>
+          <Link href="/leads" className={ui.link}>Show all open leads</Link>
         </div>
       )}
       <AwayNotice />
@@ -91,75 +141,8 @@ export function LeadsClient({ canCreate, canManageTeam, canReassign, filter }: {
         </form>
       )}
 
-      <div className={canManageTeam ? "grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]" : ""}>
-        <section aria-labelledby="open-leads" className="min-w-0 space-y-3">
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h2 id="open-leads" className={ui.h2}>
-              Open leads {rows && <span className="font-semibold tabular-nums text-stone-500">({rows.length})</span>}
-            </h2>
-            {waitingOnMe > 0 && (
-              <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-amber-900">
-                <Icon name="clock" className="h-4 w-4" /> {waitingOnMe} waiting for you
-              </span>
-            )}
-          </div>
-
-          {error && <Notice tone="bad" title="Could not load leads.">{error.message} Check your connection; this page retries on its own.</Notice>}
-          {!data && !error && (
-            <div className="space-y-3" aria-busy="true">
-              <p className="sr-only" role="status">Loading leads…</p>
-              {[0, 1, 2].map((i) => <div key={i} className="h-28 animate-pulse rounded-xl border border-stone-200 bg-white" />)}
-            </div>
-          )}
-          {rows && rows.length === 0 && (
-            <EmptyState icon="leads" title={filter ? "No leads match this view" : "No open leads"}>
-              New leads from the web form, website chat and WhatsApp appear here as soon as they arrive.
-            </EmptyState>
-          )}
-
-          <ul className="space-y-3">
-            {rows?.map((l) => {
-              const mineWaiting = l.isMine && l.status === "ASSIGNED";
-              return (
-                <li key={l.id} className={`rounded-xl border bg-white p-4 shadow-xs sm:p-5 ${mineWaiting ? "border-amber-300 ring-1 ring-amber-200" : "border-stone-200"}`}>
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="min-w-0 space-y-2">
-                      <Link href={`/contacts/${l.contactId}`} className="block truncate text-base font-bold text-stone-900 hover:text-emerald-800 hover:underline">{l.contactName}</Link>
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <SourceBadge source={l.source} />
-                        <LeadStatusBadge status={l.status} />
-                      </div>
-                    </div>
-                    {l.msLeft !== null && data && <Countdown msLeft={l.msLeft} receivedAt={data.receivedAt} />}
-                  </div>
-                  <div className="mt-3 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-                    <dl className="min-w-0 space-y-1 text-sm">
-                      <div className="flex gap-1.5">
-                        <dt className="text-stone-500">Owner:</dt>
-                        <dd className="font-semibold text-stone-900">{l.isMine ? "You" : (l.ownerName ?? "Nobody yet")}</dd>
-                      </div>
-                      {l.reason && (
-                        <div className="flex gap-1.5">
-                          <dt className="shrink-0 text-stone-500">Why:</dt>
-                          <dd className="text-stone-700">{l.reason}</dd>
-                        </div>
-                      )}
-                    </dl>
-                    {canReassign && l.status !== "NEW" && <div className="shrink-0"><ReassignMenu leadId={l.id} currentOwnerName={l.ownerName} onDone={() => mutate()} /></div>}
-                  </div>
-                  {mineWaiting && (
-                    <button type="button" disabled={pending} onClick={() => ack(l.id)} className={`${ui.btnPrimary} mt-4 !h-11 w-full !px-6 !text-[15px] sm:w-auto`}>
-                      {pending ? <Spinner /> : <Icon name="check" className="h-4 w-4" strokeWidth={2.5} />} Acknowledge
-                    </button>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-
-        {canManageTeam && <aside className="min-w-0 xl:sticky xl:top-24"><TeamPanel /></aside>}
-      </div>
+      {error && <Notice tone="bad" title="Could not load leads.">{error.message} Check your connection; this page retries on its own.</Notice>}
+      <Tabs label="Lead views" tabs={tabs} defaultTab={filter && seesAll ? "all" : undefined} />
     </div>
   );
 }

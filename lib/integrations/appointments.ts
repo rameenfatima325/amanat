@@ -248,6 +248,7 @@ export const ListQuery = z.object({
   contactId: z.string().max(40).optional().catch(undefined),
   opportunityId: z.string().max(40).optional().catch(undefined),
   mine: z.enum(["1"]).optional().catch(undefined), // My calendar page: only appointments with me, upcoming first
+  upcoming: z.enum(["1"]).optional().catch(undefined), // Calendar page, whole team: upcoming appointments, soonest first
 });
 
 /** Appointments for the contact / opportunity pages. Shown in the viewer's zone and the employee's zone (I3.5). */
@@ -258,8 +259,9 @@ export async function listAppointments(ctx: Ctx, raw: Record<string, string | un
     ...(f.contactId ? { contactId: f.contactId } : {}),
     ...(f.opportunityId ? { opportunityId: f.opportunityId } : {}),
     ...(f.mine ? { userId: ctx.userId, status: { not: "CANCELLED" }, endUtc: { gt: new Date() } } : {}),
+    ...(f.upcoming ? { status: { not: "CANCELLED" }, endUtc: { gt: new Date() } } : {}),
   };
-  const rows = await scoped(ctx).appointment.findMany({ where, orderBy: { startUtc: f.mine ? "asc" : "desc" }, take: 50, include: { contact: { select: { name: true } } } });
+  const rows = await scoped(ctx).appointment.findMany({ where, orderBy: { startUtc: f.mine || f.upcoming ? "asc" : "desc" }, take: 50, include: { contact: { select: { name: true } } } });
   // The employee's Google account email builds the "Open in Google Calendar" link (CalendarConnection has no workspace column; rows come from this workspace's appointments).
   const conns = await prisma.calendarConnection.findMany({ where: { userId: { in: Array.from(new Set(rows.map((r) => r.userId))) } }, select: { userId: true, googleEmail: true } });
   const emailOf = new Map(conns.map((c) => [c.userId, c.googleEmail]));
